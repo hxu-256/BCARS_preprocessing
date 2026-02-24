@@ -1,11 +1,9 @@
 import numpy as np
-import matplotlib.pyplot as plt
 import lazy5
-import h5py
 import time
 import os
 from concurrent.futures import ThreadPoolExecutor
-from GT_descan_BCARS_tools_11262025 import intensity_correction, dset_finder_descan, compute_sum, apply_median_filter
+from GT_descan_BCARS_tools import intensity_correction, dset_finder_descan, compute_sum, apply_median_filter
 
 DATA_FOLDER = '20260210'
 SAVE_FOLDER = '20260210'

@@ -1,5 +1,4 @@
 import numpy as np
-import matplotlib.pyplot as plt
 import copy
 import h5py
 from scipy.interpolate import interp1d
