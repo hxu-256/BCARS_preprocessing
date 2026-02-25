@@ -66,7 +66,8 @@ def dset_finder_descan(DATA_FOLDER, filename, overwrite_attrs = True):
     
 
 # For non-uniform galvo illumination
-def intensity_correction(smoothed_raw, smoothed_nrb, smoothed_dark, OUTPUT_RATIO = True, SPEC_ALIGNING_PIX = 546):
+def intensity_correction(smoothed_raw, smoothed_nrb, smoothed_dark, OUTPUT_RATIO = True, SPEC_ALIGNING_PIX = 546,
+                         raw_data=None, raw_nrb=None, raw_dark=None):
     smoothed_dark_shifted = copy.copy(smoothed_dark)
     dark_total_avg = np.mean(smoothed_dark, axis=(0,1))  #average dark on every spatial pixel, getting a 2304 dimensional data
     nrb_dark_sub = smoothed_nrb - dark_total_avg              #nrb - averaged dark on the spectral dimension
@@ -93,18 +94,41 @@ def intensity_correction(smoothed_raw, smoothed_nrb, smoothed_dark, OUTPUT_RATIO
     else:
         ratio_shifted = None
 
-    for y in np.arange(nrb_intcorrected.shape[1]):     
+    # raw mode: dark-subtract raw data using smoothed dark avg; prepare output arrays
+    use_raw = raw_data is not None
+    if use_raw:
+        raw_bcars_dark_sub = raw_data.astype(np.float64) - dark_total_avg
+        raw_bcars_dark_sub -= np.mean(raw_bcars_dark_sub[:, :, 50:200])
+        raw_bcars_shifted = np.zeros_like(raw_bcars_dark_sub)
+        raw_nrb_shifted   = np.zeros(raw_nrb.shape, dtype=np.float64)
+        raw_dark_shifted  = np.zeros(raw_dark.shape, dtype=np.float64)
+
+    for y in np.arange(nrb_intcorrected.shape[1]):
+        # shift computation always uses smoothed nrb_profile
         s_phase = phase_align(nrb_profile[y,:], nrb_profile[int(nrb_intcorrected.shape[1]//2),:], [1800,1950])
         difference_pix = int(np.round(s_phase))
-        bcars_intcorrected_shifted[:,y,:] = np.roll(bcars_intcorrected[:,y,:], difference_pix, axis=1)
-        nrb_intcorrected_shifted[:,y,:] = np.roll(nrb_intcorrected[:,y,:], difference_pix, axis=1)
-        smoothed_dark_shifted[:,y,:] = np.roll(smoothed_dark[:,y,:], difference_pix, axis=1)
-        if OUTPUT_RATIO:
-            bcars_baseline_difference_ratio = np.mean(bcars_dark_sub[:,y,50:250])
-            nrb_baseline_difference_ratio = np.mean(nrb_dark_sub[:,y,50:250])
-            ratio[:,y,:] = (bcars_dark_sub[:,y,:] - bcars_baseline_difference_ratio + 25) / (np.repeat(np.mean(nrb_dark_sub,axis=0)[np.newaxis, y, :], bcars_dark_sub.shape[0], axis=0) - nrb_baseline_difference_ratio + 25)
-            ratio_shifted[:,y,:] = np.roll(ratio[:,y,:], difference_pix, axis=1)
+        if use_raw:
+            raw_bcars_shifted[:, y, :] = np.roll(raw_bcars_dark_sub[:, y, :], difference_pix, axis=1)
+            raw_nrb_shifted[:, y, :]   = np.roll(raw_nrb[:, y, :].astype(np.float64), difference_pix, axis=1)
+            raw_dark_shifted[:, y, :]  = np.roll(raw_dark[:, y, :].astype(np.float64), difference_pix, axis=1)
+            if OUTPUT_RATIO:
+                raw_bcars_bl = np.mean(raw_bcars_dark_sub[:, y, 50:250])
+                nrb_baseline_difference_ratio = np.mean(nrb_dark_sub[:, y, 50:250])
+                ratio[:, y, :] = (raw_bcars_dark_sub[:, y, :] - raw_bcars_bl + 25) / \
+                    (np.mean(nrb_dark_sub, axis=0)[y, :] - nrb_baseline_difference_ratio + 25)
+                ratio_shifted[:, y, :] = np.roll(ratio[:, y, :], difference_pix, axis=1)
+        else:
+            bcars_intcorrected_shifted[:,y,:] = np.roll(bcars_intcorrected[:,y,:], difference_pix, axis=1)
+            nrb_intcorrected_shifted[:,y,:] = np.roll(nrb_intcorrected[:,y,:], difference_pix, axis=1)
+            smoothed_dark_shifted[:,y,:] = np.roll(smoothed_dark[:,y,:], difference_pix, axis=1)
+            if OUTPUT_RATIO:
+                bcars_baseline_difference_ratio = np.mean(bcars_dark_sub[:,y,50:250])
+                nrb_baseline_difference_ratio = np.mean(nrb_dark_sub[:,y,50:250])
+                ratio[:,y,:] = (bcars_dark_sub[:,y,:] - bcars_baseline_difference_ratio + 25) / (np.repeat(np.mean(nrb_dark_sub,axis=0)[np.newaxis, y, :], bcars_dark_sub.shape[0], axis=0) - nrb_baseline_difference_ratio + 25)
+                ratio_shifted[:,y,:] = np.roll(ratio[:,y,:], difference_pix, axis=1)
 
+    if use_raw:
+        return raw_bcars_shifted, raw_nrb_shifted, ratio_shifted, raw_dark_shifted
     return bcars_intcorrected_shifted, nrb_intcorrected_shifted, ratio_shifted, smoothed_dark_shifted
 
 
