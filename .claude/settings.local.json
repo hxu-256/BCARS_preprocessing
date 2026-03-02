@@ -1,0 +1,7 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(git restore GT_descan_BCARS_tools.py GT_descan_BCARS_preprocessing.py)"
+    ]
+  }
+}

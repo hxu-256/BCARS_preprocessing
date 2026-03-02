@@ -1,3 +1,4 @@
+import argparse
 import numpy as np
 import lazy5
 import time
@@ -5,10 +6,17 @@ import os
 from concurrent.futures import ThreadPoolExecutor
 from GT_descan_BCARS_tools import intensity_correction, dset_finder_descan, compute_sum, apply_median_filter
 
-DATA_FOLDER = 'data/raw'
-SAVE_FOLDER = 'data/preprocessed'
-SAVE_RATIO = True
-APPLY_MED = False   #use false if planning N2N denoising pipeline, use True for SVD denoising pipeline
+parser = argparse.ArgumentParser(description='BCARS preprocessing pipeline')
+parser.add_argument('input', help='Input folder containing raw HDF5 files')
+parser.add_argument('output', help='Output folder for preprocessed HDF5 files')
+parser.add_argument('--ratio', type=int, default=1, help='Save intensity ratio output (1=yes, 0=no)')
+parser.add_argument('--med_filter', type=int, default=1, help='Apply median filter (1=yes, 0=no)')
+args = parser.parse_args()
+
+DATA_FOLDER = args.input
+SAVE_FOLDER = args.output
+SAVE_RATIO = bool(args.ratio)
+APPLY_MED = bool(args.med_filter)
 
 files = os.listdir(DATA_FOLDER)
 data_list = [i for i in files if i.endswith('.h5')]
