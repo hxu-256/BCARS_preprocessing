@@ -26,7 +26,7 @@ conda activate image_proc
 ## Usage
 
 ```
-python GT_descan_BCARS_preprocessing.py <input> <output> [--ratio {0,1}] [--med_filter {0,1}]
+python GT_descan_BCARS_preprocessing.py <input> <output> [--mode {ratio,raw,vst}] [--med_filter {0,1}]
 ```
 
 ### Positional arguments
@@ -40,7 +40,7 @@ python GT_descan_BCARS_preprocessing.py <input> <output> [--ratio {0,1}] [--med_
 
 | Argument | Default | Description |
 |----------|---------|-------------|
-| `--ratio 1` | `1` | Save intensity ratio (BCARS/NRB) output. Set to `0` to save raw corrected spectra instead. |
+| `--mode` | `ratio` | Output mode (**mutually exclusive**): `ratio` = BCARS/NRB intensity ratio; `raw` = dark-subtracted / illumination-corrected spectra; `vst` = variance-stabilized dispersive-like spectrum `(I − A_nrb²)/(2·A_nrb)` (saved as float32). |
 | `--med_filter 1` | `1` | Apply 3D median filter before intensity correction. Set to `1` or ignore this cmd for crikit pipeline. Set to `0` to skip for N2N pipeline |
 
 ## Examples
@@ -54,7 +54,13 @@ python GT_descan_BCARS_preprocessing.py 20260210 20260210_out
 **Save raw corrected spectra** instead of the intensity ratio:
 
 ```bash
-python GT_descan_BCARS_preprocessing.py 20260210 20260210_out --ratio 0
+python GT_descan_BCARS_preprocessing.py 20260210 20260210_out --mode raw
+```
+
+**Save variance-stabilized (VST) spectra** — `(I − A_nrb²)/(2·A_nrb)`, per-line NRB amplitude:
+
+```bash
+python GT_descan_BCARS_preprocessing.py 20260210 20260210_out --mode vst
 ```
 
 **Skip the median filter** (faster, no smoothing):
@@ -66,21 +72,20 @@ python GT_descan_BCARS_preprocessing.py 20260210 20260210_out --med_filter 0
 **Skip median filter and save raw spectra:**
 
 ```bash
-python GT_descan_BCARS_preprocessing.py 20260210 20260210_out --ratio 0 --med_filter 0
+python GT_descan_BCARS_preprocessing.py 20260210 20260210_out --mode raw --med_filter 0
 ```
 
 ## Output
 
 Each input `.h5` file produces one output file named `preprocessed_<mode>_<filename>.h5` in the output folder, where `<mode>` is either `medfilter` or `nofilter`.
 
-The output HDF5 contains datasets under `preprocessed_images/` with spectroscopic calibration metadata written as HDF5 attributes:
+The output HDF5 contains datasets under `preprocessed_images/` with spectroscopic calibration metadata written as HDF5 attributes. The `<prefix>` is `medfilter` (`--med_filter 1`, default) or `nofilter` (`--med_filter 0`):
 
-| `--ratio` | `--med_filter` | Datasets saved |
-|-----------|----------------|----------------|
-| `1` (default) | `1` (default) | `medfilter_ratio`, `medfilter_nrb_for_ratio`, `medfilter_dark` |
-| `1` | `0` | `nofilter_ratio`, `nofilter_nrb_for_ratio`, `nofilter_dark` |
-| `0` | `1` (default) | `medfilter_raw`, `medfilter_nrb`, `medfilter_dark` |
-| `0` | `0` | `nofilter_raw`, `nofilter_nrb`, `nofilter_dark` |
+| `--mode` | Datasets saved |
+|----------|----------------|
+| `ratio` (default) | `<prefix>_ratio`, `<prefix>_nrb_for_ratio`, `<prefix>_dark` |
+| `raw` | `<prefix>_raw`, `<prefix>_nrb`, `<prefix>_dark` |
+| `vst` | `<prefix>_vst` (float32), `<prefix>_vst_nrb_amp` (float32, per-line NRB amplitude `A_nrb`), `<prefix>_nrb_for_ratio` (ones placeholder), `<prefix>_dark` |
 
 ## Pipeline overview
 

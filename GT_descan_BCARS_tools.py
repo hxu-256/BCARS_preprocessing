@@ -48,6 +48,18 @@ def dset_finder_descan(DATA_FOLDER, filename, overwrite_attrs = True):
     
     # Over-write the attributes
     if OVERWRITE_ATTRS:
+        # attrs['Calib.a_vec'] = np.array([-1.01604041e-01,  7.93978909e+02])  #np.array([-1.00147754e-01,  7.92263626e+02])
+        # attrs['Calib.probe'] = 763.5
+        # attrs['CalibOrig.probe'] = 763.5
+        # attrs['Calib.ctr_wl0'] = 670
+        # attrs['CalibOrig.ctr_wl'] = 670
+        # attrs['RasterScanParams.FastAxisStart'] = 0
+        # attrs['RasterScanParams.FastAxisStepSize'] = 0.26
+        # attrs['RasterScanParams.FastAxisSteps'] = 500
+        # attrs['RasterScanParams.FastAxisStop'] = 130
+        # attrs['RasterScanParams.FastAxisUnits'] = '$\\mu$m'
+        # attrs['Spectro.CenterWavelength'] = 670
+        ### attrs from 11112025
         attrs['Calib.a_vec'] = np.array([-1.01604041e-01,  7.93978909e+02])  #np.array([-1.00147754e-01,  7.92263626e+02])
         attrs['Calib.probe'] = 763.5
         attrs['CalibOrig.probe'] = 763.5
@@ -60,14 +72,31 @@ def dset_finder_descan(DATA_FOLDER, filename, overwrite_attrs = True):
         attrs['RasterScanParams.FastAxisUnits'] = '$\\mu$m'
         attrs['Spectro.CenterWavelength'] = 670
     
+        ### attrs from 05032025
+        # attrs['Calib.a_vec'] = np.array([-1.00147754e-01,  7.91061853e+02])
+        # attrs['Calib.probe'] = 763.5
+        # attrs['CalibOrig.probe'] = 763.5
+        # attrs['Calib.ctr_wl0'] = 670
+        # attrs['CalibOrig.ctr_wl'] = 670
+        # attrs['RasterScanParams.FastAxisStart'] = 0
+        # attrs['RasterScanParams.FastAxisStepSize'] = 0.26
+        # attrs['RasterScanParams.FastAxisSteps'] = 500
+        # attrs['RasterScanParams.FastAxisStop'] = 130
+        # attrs['RasterScanParams.FastAxisUnits'] = '$\\mu$m'
+        # attrs['Spectro.CenterWavelength'] = 670
+    
     f.close()
         
     return data, nrb_late, dark, attrs, [HYPERSPECTRAL_IMAGE_EXIST, NRB_LATE_EXIST, DARK_EXIST, ATTRS_EXIST]
     
 
 # For non-uniform galvo illumination
-def intensity_correction(smoothed_raw, smoothed_nrb, smoothed_dark, OUTPUT_RATIO = True, SPEC_ALIGNING_PIX = 546,
+def intensity_correction(smoothed_raw, smoothed_nrb, smoothed_dark, OUTPUT_RATIO = True, OUTPUT_VST = False,
+                         SPEC_ALIGNING_PIX = 546, VST_EPS = 1.0,
                          raw_data=None, raw_nrb=None, raw_dark=None):
+    # VST (variance-stabilization) and ratio are mutually exclusive; VST takes precedence.
+    if OUTPUT_VST:
+        OUTPUT_RATIO = False
     smoothed_dark_shifted = copy.copy(smoothed_dark)
     dark_total_avg = np.mean(smoothed_dark, axis=(0,1))  #average dark on every spatial pixel, getting a 2304 dimensional data
     nrb_dark_sub = smoothed_nrb - dark_total_avg              #nrb - averaged dark on the spectral dimension
@@ -103,6 +132,19 @@ def intensity_correction(smoothed_raw, smoothed_nrb, smoothed_dark, OUTPUT_RATIO
         raw_nrb_shifted   = np.zeros(raw_nrb.shape, dtype=np.float64)
         raw_dark_shifted  = np.zeros(raw_dark.shape, dtype=np.float64)
 
+    # VST mode: heterodyne variance-stabilizing transform (align first, then transform).
+    # Numerator uses raw bcars when available (nofilter), else smoothed; denominator always
+    # uses the smoothed per-line nrb_profile to keep a low-noise A_nrb. The per-line A_nrb
+    # division also performs the galvo-illumination correction (no norm_factors here).
+    if OUTPUT_VST:
+        vst_src = raw_bcars_dark_sub if use_raw else bcars_dark_sub
+        vst_shifted = np.zeros(vst_src.shape, dtype=np.float32)
+        # aligned per-line NRB amplitude A_nrb used in the denominator, shape (ny, nspec)
+        vst_nrb_amp = np.zeros((vst_src.shape[1], vst_src.shape[2]), dtype=np.float32)
+    else:
+        vst_shifted = None
+        vst_nrb_amp = None
+
     for y in np.arange(nrb_intcorrected.shape[1]):
         # shift computation always uses smoothed nrb_profile
         s_phase = phase_align(nrb_profile[y,:], nrb_profile[int(nrb_intcorrected.shape[1]//2),:], [1800,1950])
@@ -117,6 +159,13 @@ def intensity_correction(smoothed_raw, smoothed_nrb, smoothed_dark, OUTPUT_RATIO
                 ratio[:, y, :] = (raw_bcars_dark_sub[:, y, :] - raw_bcars_bl + 25) / \
                     (np.mean(nrb_dark_sub, axis=0)[y, :] - nrb_baseline_difference_ratio + 25)
                 ratio_shifted[:, y, :] = np.roll(ratio[:, y, :], difference_pix, axis=1)
+            elif OUTPUT_VST:
+                # align first (roll bcars + per-line NRB), then variance-stabilize
+                nrb_line_rolled = np.roll(nrb_profile[y, :], difference_pix)
+                nrb_amp_rolled  = np.sqrt(np.clip(nrb_line_rolled, VST_EPS, None))
+                bcars_line_rolled = np.roll(raw_bcars_dark_sub[:, y, :], difference_pix, axis=1)
+                vst_shifted[:, y, :] = (bcars_line_rolled - nrb_line_rolled) / (2.0 * nrb_amp_rolled)
+                vst_nrb_amp[y, :] = nrb_amp_rolled
         else:
             bcars_intcorrected_shifted[:,y,:] = np.roll(bcars_intcorrected[:,y,:], difference_pix, axis=1)
             nrb_intcorrected_shifted[:,y,:] = np.roll(nrb_intcorrected[:,y,:], difference_pix, axis=1)
@@ -126,10 +175,17 @@ def intensity_correction(smoothed_raw, smoothed_nrb, smoothed_dark, OUTPUT_RATIO
                 nrb_baseline_difference_ratio = np.mean(nrb_dark_sub[:,y,50:250])
                 ratio[:,y,:] = (bcars_dark_sub[:,y,:] - bcars_baseline_difference_ratio + 25) / (np.repeat(np.mean(nrb_dark_sub,axis=0)[np.newaxis, y, :], bcars_dark_sub.shape[0], axis=0) - nrb_baseline_difference_ratio + 25)
                 ratio_shifted[:,y,:] = np.roll(ratio[:,y,:], difference_pix, axis=1)
+            elif OUTPUT_VST:
+                # align first (roll bcars + per-line NRB), then variance-stabilize
+                nrb_line_rolled = np.roll(nrb_profile[y, :], difference_pix)
+                nrb_amp_rolled  = np.sqrt(np.clip(nrb_line_rolled, VST_EPS, None))
+                bcars_line_rolled = np.roll(bcars_dark_sub[:, y, :], difference_pix, axis=1)
+                vst_shifted[:, y, :] = (bcars_line_rolled - nrb_line_rolled) / (2.0 * nrb_amp_rolled)
+                vst_nrb_amp[y, :] = nrb_amp_rolled
 
     if use_raw:
-        return raw_bcars_shifted, raw_nrb_shifted, ratio_shifted, raw_dark_shifted
-    return bcars_intcorrected_shifted, nrb_intcorrected_shifted, ratio_shifted, smoothed_dark_shifted
+        return raw_bcars_shifted, raw_nrb_shifted, ratio_shifted, raw_dark_shifted, vst_shifted, vst_nrb_amp
+    return bcars_intcorrected_shifted, nrb_intcorrected_shifted, ratio_shifted, smoothed_dark_shifted, vst_shifted, vst_nrb_amp
 
 
 # Function to compute the sum along axis=3

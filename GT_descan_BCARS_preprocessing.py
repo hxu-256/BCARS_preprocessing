@@ -9,13 +9,16 @@ from GT_descan_BCARS_tools import intensity_correction, dset_finder_descan, comp
 parser = argparse.ArgumentParser(description='BCARS preprocessing pipeline')
 parser.add_argument('input', help='Input folder containing raw HDF5 files')
 parser.add_argument('output', help='Output folder for preprocessed HDF5 files')
-parser.add_argument('--ratio', type=int, default=1, help='Save intensity ratio output (1=yes, 0=no)')
+parser.add_argument('--mode', choices=['ratio', 'raw', 'vst'], default='ratio',
+                    help="Output mode (mutually exclusive): 'ratio' = BCARS/NRB intensity ratio, "
+                         "'raw' = dark-subtracted/illumination-corrected spectra, "
+                         "'vst' = variance-stabilized dispersive-like spectrum (I - A_nrb^2)/(2*A_nrb)")
 parser.add_argument('--med_filter', type=int, default=1, help='Apply median filter (1=yes, 0=no)')
 args = parser.parse_args()
 
 DATA_FOLDER = args.input
 SAVE_FOLDER = args.output
-SAVE_RATIO = bool(args.ratio)
+MODE = args.mode
 APPLY_MED = bool(args.med_filter)
 
 files = os.listdir(DATA_FOLDER)
@@ -64,8 +67,8 @@ for num, filename in enumerate(data_list):
 
     outfile = f'preprocessed_{prefix}_{filename}'
 
-    if SAVE_RATIO:
-        _, _, ratio, out_dark = intensity_correction(data_smoothed, nrb_smoothed, dark_smoothed, OUTPUT_RATIO=True, **raw_kwargs)
+    if MODE == 'ratio':
+        _, _, ratio, out_dark, _, _ = intensity_correction(data_smoothed, nrb_smoothed, dark_smoothed, OUTPUT_RATIO=True, **raw_kwargs)
         nrb_for_ratio = np.ones((10, nrb_smoothed.shape[2]))
         lazy5.create.save(file=outfile, pth=SAVE_FOLDER, dset=f'preprocessed_images/{prefix}_ratio', data=np.array(ratio), mode='w')
         lazy5.create.save(file=outfile, pth=SAVE_FOLDER, dset=f'preprocessed_images/{prefix}_nrb_for_ratio', data=np.array(nrb_for_ratio, dtype=np.uint16), mode='a')
@@ -74,8 +77,21 @@ for num, filename in enumerate(data_list):
         lazy5.alter.write_attr_dict(dset=f'preprocessed_images/{prefix}_nrb_for_ratio', attr_dict=attrs, fid=os.path.join(SAVE_FOLDER, outfile))
         lazy5.alter.write_attr_dict(dset=f'preprocessed_images/{prefix}_dark', attr_dict=attrs, fid=os.path.join(SAVE_FOLDER, outfile))
 
-    else:
-        data_out, nrb_out, _, out_dark = intensity_correction(data_smoothed, nrb_smoothed, dark_smoothed, OUTPUT_RATIO=False, **raw_kwargs)
+    elif MODE == 'vst':
+        _, _, _, out_dark, vst, vst_nrb_amp = intensity_correction(data_smoothed, nrb_smoothed, dark_smoothed, OUTPUT_VST=True, **raw_kwargs)
+        nrb_ones = np.ones((10, nrb_smoothed.shape[2]))
+        # VST output is signed/float -> save as float32 (never uint16)
+        lazy5.create.save(file=outfile, pth=SAVE_FOLDER, dset=f'preprocessed_images/{prefix}_vst', data=np.array(vst, dtype=np.float32), mode='w')
+        lazy5.create.save(file=outfile, pth=SAVE_FOLDER, dset=f'preprocessed_images/{prefix}_vst_nrb_amp', data=np.array(vst_nrb_amp, dtype=np.float32), mode='a')
+        lazy5.create.save(file=outfile, pth=SAVE_FOLDER, dset=f'preprocessed_images/{prefix}_nrb_for_ratio', data=np.array(nrb_ones, dtype=np.uint16), mode='a')
+        lazy5.create.save(file=outfile, pth=SAVE_FOLDER, dset=f'preprocessed_images/{prefix}_dark', data=np.array(out_dark, dtype=np.uint16), mode='a')
+        lazy5.alter.write_attr_dict(dset=f'preprocessed_images/{prefix}_vst', attr_dict=attrs, fid=os.path.join(SAVE_FOLDER, outfile))
+        lazy5.alter.write_attr_dict(dset=f'preprocessed_images/{prefix}_vst_nrb_amp', attr_dict=attrs, fid=os.path.join(SAVE_FOLDER, outfile))
+        lazy5.alter.write_attr_dict(dset=f'preprocessed_images/{prefix}_nrb_for_ratio', attr_dict=attrs, fid=os.path.join(SAVE_FOLDER, outfile))
+        lazy5.alter.write_attr_dict(dset=f'preprocessed_images/{prefix}_dark', attr_dict=attrs, fid=os.path.join(SAVE_FOLDER, outfile))
+
+    else:  # raw
+        data_out, nrb_out, _, out_dark, _, _ = intensity_correction(data_smoothed, nrb_smoothed, dark_smoothed, OUTPUT_RATIO=False, **raw_kwargs)
         lazy5.create.save(file=outfile, pth=SAVE_FOLDER, dset=f'preprocessed_images/{prefix}_raw', data=np.array(data_out, dtype=np.uint16), mode='w')
         lazy5.create.save(file=outfile, pth=SAVE_FOLDER, dset=f'preprocessed_images/{prefix}_nrb', data=np.array(nrb_out, dtype=np.uint16), mode='a')
         lazy5.create.save(file=outfile, pth=SAVE_FOLDER, dset=f'preprocessed_images/{prefix}_dark', data=np.array(out_dark, dtype=np.uint16), mode='a')
