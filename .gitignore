@@ -4,3 +4,4 @@ CLAUDE.md
 *.pickle
 .claude/
 .vscode/
+*.ipynb

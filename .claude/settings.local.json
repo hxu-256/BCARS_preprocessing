@@ -1,7 +1,9 @@
 {
   "permissions": {
     "allow": [
-      "Bash(git restore GT_descan_BCARS_tools.py GT_descan_BCARS_preprocessing.py)"
+      "Bash(git restore GT_descan_BCARS_tools.py GT_descan_BCARS_preprocessing.py)",
+      "Read(//home/hxu256/dropbox/workspace/crikit3_denoise/2025_Celegans/data/20251111/BCARS_preprocessing/**)",
+      "Read(//mnt/d/GaTech Dropbox/Haoyu Xu/workspace/crikit3_denoise/2025_Celegans/data/20251111/BCARS_preprocessing/**)"
     ]
   }
 }
