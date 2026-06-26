@@ -1,0 +1,59 @@
+# Test parameters for the 0506 (May 7, 2025) dataset
+# One file: 05072025_NR_dhs-3-gfp_AD_02.h5
+
+paths:
+  raw_h5_dir:          test_0506/raw_input
+  preprocessed_h5_dir: test_0506/preprocessed_h5
+  mat_dir:             test_0506/mat
+  output_dir:          test_0506/output
+
+preprocessing:
+  mode: vst
+  med_filter: false     # nofilter → noisy i.i.d. for CCV denoising
+  calibration:          # 05032025 calibration (closest documented for this date)
+    a_vec: [-1.00147754e-01, 7.91061853e+02]
+    probe_nm:          763.5
+    ctr_wl0_nm:        670.0
+    fast_axis_step_um: 0.26
+    fast_axis_steps:   500
+
+h5tomat:
+  detrend_mode:  whittaker
+  smoothness:    1.0e5
+  norm_mode:     robust_symmetric
+  pct:           0.05
+  wn_min:        400.0
+  wn_max:        1800.0
+
+ccvsvd:
+  tau:    0.5
+  recon:  symmetric
+  smooth: 0.0
+
+postprocess:
+  phase_method: hilbert
+  hilbert:
+    pad_factor: 2
+    n_edge:     30
+  kk:
+    cars_amp_offset: 1.0
+    nrb_amp_offset:  1.0
+    phase_offset:    0.0
+    conjugate:       false
+    norm_to_nrb:     true
+    pad_factor:      1
+    n_edge:          30
+    bad_value:       1.0e-8
+  pec:
+    enabled:           true
+    smoothness_param:  10
+    asym_param:        3.0e-4
+    redux:             5
+    order:             2
+    max_iter:          100
+    min_diff:          1.0e-6
+    verbose:           false
+  sec:
+    enabled:   false
+    win_size:  601
+    order:     2

@@ -1,0 +1,90 @@
+# ============================================================
+# BCARS end-to-end pipeline parameters
+# Edit paths and calibration before running.
+#
+# Step 1 runs in the  image_proc  conda environment.
+# Step 2 runs in the  crikit3     conda environment.
+# ============================================================
+
+# ── Paths ────────────────────────────────────────────────────────────────────
+paths:
+  raw_h5_dir:          /path/to/raw/h5         # raw CRIKit HDF5 files
+  preprocessed_h5_dir: /path/to/preprocessed   # step 1a output (intermediate .h5)
+  mat_dir:             /path/to/mat            # step 1b output / step 2 input (.mat)
+  output_dir:          /path/to/output         # step 2 output (Raman .tif + wn.txt)
+  # example for paper figures:
+  # output_dir: /mnt/d/GaTech Dropbox/Haoyu Xu/workspace/crikit3_denoise/paper_report/fig/f5
+
+# ── Step 1a: Preprocessing (image_proc env) ──────────────────────────────────
+preprocessing:
+  mode: vst            # vst | ratio | raw
+  med_filter: false    # true → prefix "medfilter"; false → prefix "nofilter"
+                       # (false recommended: keeps noise i.i.d. for CCV denoising)
+
+  # Wavenumber calibration — MUST match the acquisition date.
+  # 20251111 dataset:
+  calibration:
+    a_vec: [-1.01604041e-01, 7.93978909e+02]   # [slope, intercept] (cm-1/pixel)
+    probe_nm:          763.5
+    ctr_wl0_nm:        670.0
+    fast_axis_step_um: 0.26
+    fast_axis_steps:   500
+  # 0506 / 05032025 dataset (uncomment and replace above):
+  # calibration:
+  #   a_vec: [-1.00147754e-01, 7.91061853e+02]
+  #   probe_nm:          763.5
+  #   ctr_wl0_nm:        670.0
+  #   fast_axis_step_um: 0.26
+  #   fast_axis_steps:   500
+
+# ── Step 1b: H5 → MAT (image_proc env) ───────────────────────────────────────
+h5tomat:
+  detrend_mode:  whittaker        # whittaker | running | none
+  smoothness:    1.0e5            # Whittaker lambda (larger = smoother baseline)
+  norm_mode:     robust_symmetric # robust_symmetric | robust | minmax
+  pct:           0.05             # symmetric clip percentile: low=pct, high=100-pct
+  wn_min:        400.0            # fingerprint window lower bound (cm-1)
+  wn_max:        1800.0           # fingerprint window upper bound (cm-1)
+
+# ── Step 2a: CCV-SVD denoising (crikit3 env) ─────────────────────────────────
+ccvsvd:
+  tau:    0.5        # split-half correlation threshold: keep components where r ≥ tau
+  recon:  symmetric  # interleave | symmetric (default, no Nyquist comb) | subspace
+  smooth: 0.0        # spectral Gaussian sigma in pixels after reconstruction (0 = off)
+
+# ── Step 2b: Phase retrieval + error correction (crikit3 env) ────────────────
+postprocess:
+  # Use "hilbert" for VST (dispersive) input (default for this pipeline).
+  # Use "kk" only if feeding raw BCARS intensity (non-detrended ratio mode).
+  phase_method: hilbert
+
+  hilbert:
+    pad_factor: 2
+    n_edge:     30
+
+  kk:  # only active when phase_method: kk
+    cars_amp_offset: 1.0
+    nrb_amp_offset:  1.0
+    phase_offset:    0.0
+    conjugate:       false
+    norm_to_nrb:     true
+    pad_factor:      1
+    n_edge:          30
+    bad_value:       1.0e-8
+
+  # clip_negative: false   # set true to clip imag<0 after phase retrieval (use when PEC fails)
+
+  pec:  # phase error correction (ALS)
+    enabled:           true
+    smoothness_param:  10      # paper-figure value: smoother baseline, avoids tracking peaks
+    asym_param:        3.0e-4  # paper-figure value: less aggressive than 1e-5 default
+    redux:             5
+    order:             2
+    max_iter:          100
+    min_diff:          1.0e-6
+    verbose:           false
+
+  sec:  # scale error correction (Savitzky-Golay) — usually not needed for VST
+    enabled:   false
+    win_size:  601
+    order:     2

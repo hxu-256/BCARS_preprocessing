@@ -1,0 +1,61 @@
+# PMV Innie dataset — 20260306 acquisition
+# Raw shape: (186, 501, 2304) = (nx_slow, ny_fast, nspec)
+# Same calibration as 20251111 (verified from HDF5 attrs)
+
+paths:
+  raw_h5_dir:          inniepmv/raw_input
+  preprocessed_h5_dir: inniepmv/preprocessed_h5
+  mat_dir:             inniepmv/mat
+  output_dir:          inniepmv/output
+
+preprocessing:
+  mode: vst
+  med_filter: false
+  calibration:
+    a_vec: [-1.01604041e-01, 7.93978909e+02]
+    probe_nm:          763.5
+    ctr_wl0_nm:        670.0
+    fast_axis_step_um: 0.27314219253881267   # SlowAxisStepSize from attrs
+    fast_axis_steps:   186
+
+h5tomat:
+  detrend_mode:  whittaker
+  smoothness:    1.0e5
+  norm_mode:     robust_symmetric
+  pct:           0.05
+  wn_min:        400.0
+  wn_max:        1800.0
+
+ccvsvd:
+  tau:    0.5
+  recon:  symmetric
+  smooth: 0.0
+
+postprocess:
+  phase_method: hilbert
+  clip_negative: false
+  hilbert:
+    pad_factor: 2
+    n_edge:     30
+  kk:
+    cars_amp_offset: 1.0
+    nrb_amp_offset:  1.0
+    phase_offset:    0.0
+    conjugate:       false
+    norm_to_nrb:     true
+    pad_factor:      1
+    n_edge:          30
+    bad_value:       1.0e-8
+  pec:
+    enabled:           true
+    smoothness_param:  10
+    asym_param:        3.0e-4
+    redux:             5
+    order:             2
+    max_iter:          100
+    min_diff:          1.0e-6
+    verbose:           false
+  sec:
+    enabled:   false
+    win_size:  601
+    order:     2
